@@ -63,18 +63,21 @@ function poplar(html) {
 poplar.populate = function(el, data) {
   var bindings = elements.get(el);
 
-  bindings.textNodes.forEach(function(binding) {
+  for (var i = 0; i < bindings.textNodes.length; i++) {
+    var binding = bindings.textNodes[i];
     var value = getProp(data, binding.key);
     binding.textNode.data = value;
-  });
+  }
 
-  bindings.attributes.forEach(function(binding) {
+  // TODO: might not be roc-y enough ;)
+  for (var i = 0; i < bindings.attributes.length; i++) {
+    var binding = bindings.attributes[i];
     var value = binding.template.replace(regex.variable, function(match, group) {
       return getProp(data, group);
     });
 
     binding.el.setAttribute(binding.attribute, value);
-  });
+  }
 };
 
 function swapBindings(el) {
@@ -115,8 +118,15 @@ function elementify(html) {
   return div;
 }
 
-function getProp(object, path) {
-  return path && getDeep(object, path.split('.'));
+function getProp(item, path) {
+  if (!path) return;
+  var parts = path.split('.');
+
+  // Fast paths
+  if (parts.length == 1) return item[parts[0]];
+  if (parts.length == 2) return item[parts[0]][parts[1]];
+
+  return getDeep(item, parts);
 }
 
 function getDeep(item, parts) {
