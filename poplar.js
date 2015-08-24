@@ -1,7 +1,7 @@
 ;(function(define){define(function(require,exports,module){
 /*jshint esnext:true*/
 
-var debug = 0 ? (...args) => console.log('[poplar]', ...args) : ()=>{};
+var debug = 0 ? console.log.bind(console, '[poplar]') : function() {};
 var elements = new WeakMap();
 var divider = ':::';
 
@@ -34,14 +34,14 @@ function poplar(html) {
     // attribute bindings
     .replace(regex.attrs, function(m, attrs) {
       return m.replace(regex.attr, function(m, g1, g2) {
-        return `data-bind-attr="${g1}${divider}${g2}`;
+        return 'data-bind-attr="' + g1 + divider + g2 + '"';
       });
     })
 
     // textNode bindings
     .replace(regex.content, function(m, content) {
       return m.replace(regex.variable, function(m, group) {
-        return `<span data-bind="${group}"/>`;
+        return '<span data-bind="' + group + '"/>';
       });
     });
 
@@ -62,12 +62,12 @@ function poplar(html) {
 poplar.populate = function(el, data) {
   var bindings = elements.get(el);
 
-  bindings.textNodes.forEach(binding => {
+  bindings.textNodes.forEach(function(binding) {
     var value = getProp(data, binding.key);
     binding.textNode.data = value;
   });
 
-  bindings.attributes.forEach(binding => {
+  bindings.attributes.forEach(function(binding) {
     var value = binding.template.replace(regex.variable, function(match, group) {
       return getProp(data, group);
     });
