@@ -47,9 +47,10 @@ function poplar(html) {
 
   var parent = elementify(formatted);
   var child = parent.firstElementChild;
-  elements.set(child, swapBindings(parent));
+  var rocified = rocify(child);
+  elements.set(rocified, swapBindings(rocified));
 
-  return child;
+  return rocified;
 }
 
 /**
@@ -121,6 +122,31 @@ function getProp(object, path) {
 function getDeep(item, parts) {
   var part = parts.shift();
   return parts.length ? getDeep(item[part], parts) : item[part];
+}
+
+/**
+ * Removes empty text nodes recursively to optimize rendering performance.
+ *
+ * @param  {HTMLElement} el  dom element
+ */
+function rocify(el) {
+  if (el.childNodes.length === 0) {
+    return el;
+  }
+
+  // Will remove elements while iterating
+  for (var i = el.childNodes.length - 1; i >= 0; i--) {
+    var child = el.childNodes[i];
+
+    if (!child.tagName && !child.data.replace(/\s/g, '').length) {
+      child.remove();
+      continue;
+    }
+
+    rocify(child);
+  }
+
+  return el;
 }
 
 });})(typeof define=='function'&&define.amd?define
