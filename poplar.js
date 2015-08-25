@@ -1,7 +1,7 @@
-;(function(define){define(function(require,exports,module){
+;(function(define){'use strict';define(function(require,exports,module){
 /*jshint esnext:true*/
 
-var debug = 0 ? console.log.bind(console, '[poplar]') : function() {};
+var debug = 1 ? console.log.bind(console, '[poplar]') : function() {};
 var elements = new WeakMap();
 var divider = ':::';
 
@@ -41,15 +41,18 @@ function poplar(html) {
     // textNode bindings
     .replace(regex.content, function(m, content) {
       return m.replace(regex.variable, function(m, group) {
-        return '<span data-bind="' + group + '"/>';
+        return '<span data-bind="' + group + '"></span>';
       });
     });
 
   var parent = elementify(formatted);
   var child = parent.firstElementChild;
   var rocified = rocify(child);
+
+  // store reference to element
   elements.set(rocified, swapBindings(rocified));
 
+  debug('poplared', formatted, rocified);
   return rocified;
 }
 
@@ -160,6 +163,6 @@ function rocify(el) {
 }
 
 });})(typeof define=='function'&&define.amd?define
-:(function(n,w){return typeof module=='object'?function(c){
+:(function(n,w){'use strict';return typeof module=='object'?function(c){
 c(require,exports,module);}:function(c){var m={exports:{}};c(function(n){
 return w[n];},m.exports,m);w[n]=m.exports;};})('poplar',this));
