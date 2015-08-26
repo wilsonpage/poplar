@@ -1,15 +1,14 @@
 ;(function(define){'use strict';define(function(require,exports,module){
 /*jshint esnext:true*/
 
-var debug = 1 ? console.log.bind(console, '[poplar]') : function() {};
+var debug = 0 ? console.log.bind(console, '[poplar]') : function() {};
 var elements = new WeakMap();
-var divider = ':::';
 
 var regex = {
   content: />([^<]+)</g,
-  variable: /\$\{([^\}]+)\}/g,
-  attrs: /<[a-z\-]+ ([^>]+)/g,
-  attr: /([a-z]+)\=\"([^\"]+\$\{[^\"]+|\$[^"]+)"/g
+  var: /\$\{([^\}]+)\}/g,
+  attrs: /(<[a-z\-]+ )(.+?)( ?\/>|>)/g,
+  attr: /([a-z\-]+)="([^\"]+\$\{[^\"]+|\$[^"]+)"/g
 };
 
 /**
@@ -30,30 +29,40 @@ function poplar(html) {
 
   var formatted = html
     .replace(/\n/g, '')
+    .replace(/  +/g, '')
 
     // attribute bindings
-    .replace(regex.attrs, function(m, attrs) {
-      return m.replace(regex.attr, function(m, g1, g2) {
-        return 'data-bind-attr="' + g1 + divider + g2 + '"';
+    .replace(regex.attrs, function(match, start, content, end) {
+      var dynamic = [];
+      var simple = content.replace(regex.attr, function(match, name, prop) {
+        dynamic.push(`${name}=${encodeURIComponent(prop)}`);
+        return '';
       });
+
+      // Return original if no dynamic attrs were found
+      if (!dynamic.length) return match;
+
+      var dataBindAttrs = dynamic.join(' ');
+      var tag = `${start}${simple} data-poplar-attrs="${dataBindAttrs}"${end}`;
+      return tag.replace(/  +/g, ' ');
     })
 
     // textNode bindings
     .replace(regex.content, function(m, content) {
-      return m.replace(regex.variable, function(m, group) {
-        return '<span data-bind="' + group + '"></span>';
+      return m.replace(regex.var, function(m, group) {
+        return '<span data-poplar-text="' + group + '"></span>';
       });
     });
 
-  var parent = elementify(formatted);
-  var child = parent.firstElementChild;
-  var rocified = rocify(child);
+  var parent = rocify(elementify(formatted));
+  var el = parent.firstElementChild;
 
-  // store reference to element
-  elements.set(rocified, swapBindings(rocified));
+  elements.set(el, {
+    textNodes: replaceTextPlaceholders(parent),
+    attrs: replaceAttrPlaceholders(parent)
+  });
 
-  debug('poplared', formatted, rocified);
-  return rocified;
+  return el;
 }
 
 /**
@@ -64,91 +73,184 @@ function poplar(html) {
  * @public
  */
 poplar.populate = function(el, data) {
-  var bindings = elements.get(el);
+  debug('poplate', el, data);
 
-  for (var i = 0; i < bindings.textNodes.length; i++) {
-    var binding = bindings.textNodes[i];
-    var value = getProp(data, binding.key);
-    binding.textNode.data = value;
+  var bindings = elements.get(el);
+  var textNodes = bindings.textNodes;
+  var attrs = bindings.attrs;
+  var i = textNodes.length;
+  var j = attrs.length;
+
+  // text nodes
+  while (i--) {
+    textNodes[i].node.data = getProp(data, textNodes[i].key);
   }
 
-  // TODO: might not be roc-y enough ;)
-  for (var i = 0; i < bindings.attributes.length; i++) {
-    var binding = bindings.attributes[i];
-    var value = binding.template.replace(regex.variable, function(match, group) {
-      return getProp(data, group);
-    });
+  // attributes
+  while (j--) {
+    var item = attrs[j];
 
-    binding.el.setAttribute(binding.attribute, value);
+    // If the variable is part of an
+    // attribute string it must be
+    // templated each time
+    var value = item.template
+      ? interpolate(item.template, data)
+      : getProp(data, item.prop);
+
+    item.el.setAttribute(item.name, value);
   }
 };
 
-function swapBindings(el) {
-  var textPlaceholders = el.querySelectorAll('[data-bind]');
-  var attributePlaceholders = el.querySelectorAll('[data-bind-attr]');
-  return {
-    textNodes: [].map.call(textPlaceholders, replaceTextPlaceholder),
-    attributes: [].map.call(attributePlaceholders, replaceAttributePlaceholder)
-  };
+/**
+ * Template a string.
+ *
+ * @example
+ *
+ * interpolate('foo ${bar}', { bar: 'bar'}); //=> 'foo bar'
+ *
+ * @param  {String} string
+ * @param  {Object} data
+ * @return {String}
+ */
+function interpolate(string, data) {
+  return string.replace(regex.var, function(match, group) {
+    return getProp(data, group);
+  });
 }
 
-function replaceTextPlaceholder(el) {
-  var textNode = document.createTextNode('');
-  el.parentNode.replaceChild(textNode, el);
-  return {
-    key: el.dataset.bind,
-    textNode: textNode
-  };
+/**
+ * Replace the <span> textNode placeholders
+ * with real textNodes and return a references.
+ *
+ * @param  {HTMLElement} el
+ * @return {Array}
+ */
+function replaceTextPlaceholders(el) {
+  var placeholders = el.querySelectorAll('[data-poplar-text]');
+  var i = placeholders.length;
+  var result = [];
+
+  while (i--) {
+    var node = document.createTextNode('');
+    placeholders[i].parentNode.replaceChild(node, placeholders[i]);
+    result.push({
+      key: placeholders[i].dataset.poplarText,
+      node: node
+    });
+  }
+
+  return result;
 }
 
-function replaceAttributePlaceholder(el) {
-  var values = el.dataset.bindAttr.split(divider);
-  var attribute = values[0];
-  var value = values[1];
+/**
+ * Remove the [data-poplar-attr] reference
+ * and return a list of all dynamic attributes.
+ *
+ * @param  {HTMLElement} el
+ * @return {Array}
+ */
+function replaceAttrPlaceholders(el) {
+  var placeholders = el.querySelectorAll('[data-poplar-attrs]');
+  var i = placeholders.length;
+  var result = [];
 
-  el.removeAttribute('data-bind-attr');
+  while (i--) {
+    var attrs = placeholders[i].dataset.poplarAttrs.split(' ');
+    var j = attrs.length;
 
-  return {
-    template: value,
-    attribute: attribute,
-    el: el
-  };
+    while (j--) {
+      var parts = attrs[j].split('=');
+      var value = decodeURIComponent(parts[1]);
+      var attr = {
+        name: parts[0],
+        el: placeholders[i]
+      };
+
+      // If the variable is *part* of the whole string
+      // we must interpolate the variable into the string
+      // each time .populate() is called. If the variable
+      // fills the entire string we can slam it straight in.
+      if (isPartial(value)) attr.template = value;
+      else attr.prop = value.replace(regex.var, '$1');
+
+      result.push(attr);
+    }
+
+    placeholders[i].removeAttribute('data-poplar-attrs');
+  }
+
+  return result;
 }
 
+/**
+ * Detect if variable is part of
+ * a larger string.
+ *
+ * @example
+ *
+ * isPartial('before ${foo}') //=> true
+ * isPartial('${foo} after') //=> true
+ * isPartial('${foo}') //=> false
+ *
+ * @param  {String}  value
+ * @return {Boolean}
+ */
+function isPartial(value) {
+  return !/^\$\{.+\}$/.test(value);
+}
+
+/**
+ * Turn an HTML String into an element.
+ *
+ * @param  {String} html
+ * @return {HTMLElement}
+ */
 function elementify(html) {
   var div = document.createElement('div');
   div.innerHTML = html;
   return div;
 }
 
-function getProp(item, path) {
+/**
+ * Get a property from an object,
+ * supporting dot notation for
+ * deep properties.
+ *
+ * @example
+ *
+ * getProp({ foo: { bar: 1 }}, 'foo.bar') //=> 1
+ *
+ * @param  {[type]} item [description]
+ * @param  {[type]} path [description]
+ * @return {[type]}      [description]
+ */
+function getProp(object, path) {
   if (!path) return;
+
   var parts = path.split('.');
 
   // Fast paths
-  if (parts.length == 1) return item[parts[0]];
-  if (parts.length == 2) return item[parts[0]][parts[1]];
+  if (parts.length == 1) return object[parts[0]];
+  if (parts.length == 2) return object[parts[0]][parts[1]];
 
-  return getDeep(item, parts);
-}
-
-function getDeep(item, parts) {
-  var part = parts.shift();
-  return parts.length ? getDeep(item[part], parts) : item[part];
+  return (function getDeep(object, parts) {
+    var part = parts.shift();
+    return parts.length ? getDeep(object[part], parts) : object[part];
+  })(object, parts);
 }
 
 /**
- * Removes empty text nodes recursively to optimize rendering performance.
+ * Removes empty text nodes recursively
+ * to optimize rendering performance.
  *
- * @param  {HTMLElement} el  dom element
+ * @param  {HTMLElement} el
  */
 function rocify(el) {
-  if (el.childNodes.length === 0) {
-    return el;
-  }
+  if (el.childNodes.length === 0) return el;
+  var i = el.childNodes.length;
 
   // Will remove elements while iterating
-  for (var i = el.childNodes.length - 1; i >= 0; i--) {
+  while (i--) {
     var child = el.childNodes[i];
 
     if (!child.tagName && !child.data.replace(/\s/g, '').length) {
