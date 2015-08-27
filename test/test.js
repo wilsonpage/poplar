@@ -51,4 +51,20 @@ suite('poplar >', function() {
     sinon.assert.notCalled(replace);
     assert.equal(el.getAttribute('title'), 'foo');
   });
+
+  test('can re-use parsed element to minimise parseHTML tasks', function() {
+    var parsed = poplar.parse('<h1>${name}</h1>');
+
+    var el1 = poplar.create(parsed.cloneNode(true));
+    var el2 = poplar.create(parsed.cloneNode(true));
+    var el3 = poplar.create(parsed.cloneNode(true));
+
+    poplar.populate(el1, { name: '1' });
+    poplar.populate(el2, { name: '2' });
+    poplar.populate(el3, { name: '3' });
+
+    assert.equal(el1.textContent, '1');
+    assert.equal(el2.textContent, '2');
+    assert.equal(el3.textContent, '3');
+  });
 });
