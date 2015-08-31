@@ -12,6 +12,20 @@ suite('poplar >', function() {
     this.sinon.restore();
   });
 
+  function totalSize(node) {
+    var result = 0;
+    if (node.childNodes.length === 0) {
+      return 0;
+    }
+
+    for (var i = 0; i < node.childNodes.length; i++) {
+      var child = node.childNodes[i];
+      result += 1 + totalSize(child);
+    }
+
+    return result;
+  }
+
   test('it can place variables into text nodes', function() {
     var el = poplar('<div>${foo}</div>');
     poplar.populate(el, { foo: 'foo' });
@@ -66,5 +80,17 @@ suite('poplar >', function() {
     assert.equal(el1.textContent, '1');
     assert.equal(el2.textContent, '2');
     assert.equal(el3.textContent, '3');
+  });
+
+  test('it removes useless textNodes to lighten up the DOM', function() {
+    var template =
+      '<div title="${foo}">\n' +
+      '  <span>${bar}</span> \n' +
+      '  \n ' +
+      '\n' +
+      '  <img src="${bat}" />\n ' +
+      '</div>';
+    var el = poplar(template);
+    assert.equal(totalSize(el), 3);
   });
 });
