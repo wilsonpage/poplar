@@ -93,4 +93,15 @@ suite('poplar >', function() {
     var el = poplar(template);
     assert.equal(totalSize(el), 3);
   });
+
+  suite('.populate()', function() {
+    test('it returns `false` if element is unknown', function() {
+      assert.isFalse(poplar.populate(document.createElement('div'), {}));
+    });
+
+    test('it results `true` if element is known', function() {
+      var el = poplar('<div>${foo}</div>');
+      assert.isTrue(poplar.populate(el, { foo: 'foo' }));
+    });
+  });
 });

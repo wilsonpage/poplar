@@ -118,6 +118,11 @@ poplar.populate = function(el, data) {
   debug('poplate', el, data);
 
   var bindings = elements.get(el);
+  if (!bindings) {
+    debug('unknown element');
+    return false;
+  }
+
   var textNodes = bindings.textNodes;
   var attrs = bindings.attrs;
   var i = textNodes.length;
@@ -141,6 +146,9 @@ poplar.populate = function(el, data) {
 
     item.el.setAttribute(item.name, value);
   }
+
+  debug('populated');
+  return true;
 };
 
 /**
