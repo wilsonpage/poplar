@@ -32,6 +32,40 @@ suite('poplar >', function() {
     assert.equal(el.textContent, 'foo');
   });
 
+  suite('paint optimization', function() {
+    var dataDescriptor, setData, el;
+
+    setup(function() {
+      el = poplar('<div>${foo}</div>');
+
+      dataDescriptor = Object.getOwnPropertyDescriptor(
+        CharacterData.prototype,
+        'data'
+      );
+
+      setData = this.sinon.spy(dataDescriptor, 'set');
+
+      Object.defineProperty(CharacterData.prototype, 'data', {
+        set: setData,
+        get: dataDescriptor.get
+      });
+    });
+
+    teardown(function() {
+      Object.defineProperty(
+        CharacterData.prototype,
+        'data',
+        dataDescriptor
+      );
+    });
+
+    test('it skips the update if the content is the same', function() {
+      poplar.populate(el, { foo: 'bar' });
+      poplar.populate(el, { foo: 'bar' });
+      sinon.assert.calledOnce(setData);
+    });
+  });
+
   test('it can place variables as partial textContent', function() {
     var el = poplar('<div>foo: ${foo}</div>');
     poplar.populate(el, { foo: 'foo' });
