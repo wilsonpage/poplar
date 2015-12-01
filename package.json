@@ -25,5 +25,6 @@
   "scripts": {
     "test": "./node_modules/karma/bin/karma start test/karma.conf.js --single-run",
     "test-dev": "./node_modules/karma/bin/karma start test/karma.conf.js"
-  }
+  },
+  "version": "1.0.0"
 }
