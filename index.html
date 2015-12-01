@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <script src="poplar.js"></script>
+  <script src="popel.js"></script>
   <title>poplar</title>
 </head>
 <body>
@@ -16,10 +16,10 @@
   <script>
     var template = document.querySelector('template');
 
-    var el = poplar(template.innerHTML);
+    var el = popel(template.innerHTML);
     document.body.appendChild(el);
 
-    poplar.populate(el, {
+    popel.populate(el, {
       name: 'wilson',
       meta: { twitter: 'wilsonpage' }
     });
